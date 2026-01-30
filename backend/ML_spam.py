@@ -87,7 +87,7 @@ class SpamEngine:
 if __name__ == "__main__":
     ia = SpamEngine()
 
-    msg = "Gagnez 500€ en cliquant sur http://arnaque.com !! Appelez le 0601020304"
+    msg = "cheri tu me manque !! Appelez sur  0601020304"
     verdict, score = ia.predire(msg)
     
     print(f"\nANALYSE : {msg}")
