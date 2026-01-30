@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Mail, Lock, Apple, Chrome } from 'lucide-react';
+import { Mail, Lock, Apple, Chrome, User, Eye, EyeOff } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { authAPI } from '../../services/api';
 
@@ -9,6 +9,8 @@ export default function ModernLoginPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
   const [gridLines, setGridLines] = useState([]);
+  const [testCredentials, setTestCredentials] = useState(null);
+  const [showPassword, setShowPassword] = useState(false);
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -16,6 +18,15 @@ export default function ModernLoginPage() {
     if (authAPI.isAuthenticated()) {
       navigate('/home');
     }
+
+    // Fetch test credentials
+    const fetchTestCredentials = async () => {
+      const data = await authAPI.getTestCredentials();
+      if (data.available) {
+        setTestCredentials(data);
+      }
+    };
+    fetchTestCredentials();
 
     // Generate animated grid lines
     const lines = [];
@@ -28,6 +39,14 @@ export default function ModernLoginPage() {
     }
     setGridLines(lines);
   }, [navigate]);
+
+  // Fonction pour remplir automatiquement les credentials de test
+  const useTestCredentials = () => {
+    if (testCredentials) {
+      setEmail(testCredentials.email);
+      setPassword(testCredentials.password);
+    }
+  };
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -141,6 +160,33 @@ export default function ModernLoginPage() {
               </NavLink>
             </p>
           </div>
+
+          {/* Test Credentials Banner */}
+          {testCredentials && (
+            <div className="mb-6 p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-xl animate-fade-in">
+              <div className="flex items-center gap-2 mb-3">
+                <User className="w-4 h-4 text-cyan-400" />
+                <span className="text-cyan-400 font-semibold text-sm">Demo Account</span>
+              </div>
+              <div className="space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Email:</span>
+                  <code className="text-cyan-300 bg-black/30 px-2 py-1 rounded">{testCredentials.email}</code>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-gray-400">Password:</span>
+                  <code className="text-cyan-300 bg-black/30 px-2 py-1 rounded">{testCredentials.password}</code>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={useTestCredentials}
+                className="mt-3 w-full py-2 bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-500/30 rounded-lg text-cyan-300 text-sm font-medium transition-all duration-300"
+              >
+                Use Demo Account
+              </button>
+            </div>
+          )}
 
           {/* Error Message */}
           {error && (

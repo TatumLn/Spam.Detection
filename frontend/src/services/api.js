@@ -101,6 +101,16 @@ export const authAPI = {
   getCurrentUser: () => {
     return getUser();
   },
+
+  // Récupérer les credentials de test (pour la démo)
+  getTestCredentials: async () => {
+    try {
+      const response = await fetch(`${API_URL}/auth/test-credentials`);
+      return await response.json();
+    } catch {
+      return { available: false };
+    }
+  },
 };
 
 // ============ SPAM API ============

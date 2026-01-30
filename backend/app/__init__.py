@@ -45,9 +45,10 @@ def create_app(config_name='default'):
     app.register_blueprint(auth_bp, url_prefix='/api/auth')
     app.register_blueprint(spam_bp, url_prefix='/api/spam')
 
-    # Créer les tables
+    # Créer les tables et l'utilisateur de test
     with app.app_context():
         db.create_all()
+        create_test_user()
 
     # Route de santé
     @app.route('/api/health')
@@ -55,3 +56,31 @@ def create_app(config_name='default'):
         return {'status': 'ok', 'message': 'SpamGuard API is running'}
 
     return app
+
+
+def create_test_user():
+    """Crée l'utilisateur de test si les variables d'environnement sont définies."""
+    from .models.user import User
+
+    test_email = os.environ.get('TEST_EMAIL')
+    test_password = os.environ.get('TEST_PASSWORD')
+
+    if not test_email or not test_password:
+        return
+
+    # Vérifier si l'utilisateur existe déjà
+    existing_user = User.query.filter_by(email=test_email.lower()).first()
+
+    if existing_user:
+        # Mettre à jour le mot de passe si nécessaire
+        if not existing_user.check_password(test_password):
+            existing_user.set_password(test_password)
+            db.session.commit()
+            print(f"[TEST USER] Mot de passe mis à jour pour {test_email}")
+    else:
+        # Créer l'utilisateur de test
+        user = User(name="Test User", email=test_email.lower())
+        user.set_password(test_password)
+        db.session.add(user)
+        db.session.commit()
+        print(f"[TEST USER] Utilisateur de test créé: {test_email}")

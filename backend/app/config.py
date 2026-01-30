@@ -1,13 +1,30 @@
 import os
 from datetime import timedelta
 
+
+def get_database_url():
+    """
+    Récupère l'URL de la base de données.
+    Corrige le préfixe postgres:// vers postgresql:// pour SQLAlchemy.
+    """
+    database_url = os.environ.get('DATABASE_URL')
+
+    if database_url:
+        # Render utilise postgres:// mais SQLAlchemy nécessite postgresql://
+        if database_url.startswith('postgres://'):
+            database_url = database_url.replace('postgres://', 'postgresql://', 1)
+        return database_url
+
+    # Fallback vers SQLite pour le développement local
+    return 'sqlite:///' + os.path.join(os.path.dirname(os.path.dirname(__file__)), 'spam_detector.db')
+
+
 class Config:
     """Configuration de base"""
     SECRET_KEY = os.environ.get('SECRET_KEY') or 'dev-secret-key-change-in-production'
 
-    # SQLite Database
-    SQLALCHEMY_DATABASE_URI = os.environ.get('DATABASE_URL') or \
-        'sqlite:///' + os.path.join(os.path.dirname(os.path.dirname(__file__)), 'spam_detector.db')
+    # Database (PostgreSQL en production, SQLite en développement)
+    SQLALCHEMY_DATABASE_URI = get_database_url()
     SQLALCHEMY_TRACK_MODIFICATIONS = False
 
     # JWT Configuration
