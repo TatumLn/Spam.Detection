@@ -1,66 +1,77 @@
+import os
+import re
 import pandas as pd
 import string
+import joblib
 import nltk
 from nltk.corpus import stopwords
-from sklearn.model_selection import train_test_split
-from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
+from nltk.stem.snowball import FrenchStemmer
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+from sklearn.pipeline import Pipeline
 
-# 1. Téléchargement des ressources pour le français
-nltk.download('stopwords')
+# --- 1. CONFIGURATION ---
+nltk.download('stopwords', quiet=True)
+stemmer = FrenchStemmer()
 stop_words_fr = stopwords.words('french')
 
-# 2. Chargement de la dataset
-# Assurez-vous que le fichier csv est dans le même dossier
-df = pd.read_csv('french_spam_only.csv')
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+DATA_FILE = os.path.join(BASE_DIR, 'french_spam_only.csv')
+MODEL_FILE = os.path.join(BASE_DIR, 'spam_model.pkl')
 
-# 3. Fonction de nettoyage (Preprocessing)
-def nettoyage_texte(message):
-    # Supprimer la ponctuation
-    sans_ponctuation = [char for char in message if char not in string.punctuation]
-    message = ''.join(sans_ponctuation)
-    
-    # Supprimer les mots vides (stopwords) français
-    return [mot for mot in message.split() if mot.lower() not in stop_words_fr]
+# --- 2. LA FONCTION DOIT ÊTRE DÉFINIE AVANT LE CHARGEMENT ---
+def preprocessing_ultra(message):
+    message = message.lower()
+    message = re.sub(r'http\S+|www\S+|https\S+', '_URL_', message, flags=re.MULTILINE)
+    message = re.sub(r'\d{10}', '_PHONE_', message)
+    message = re.sub(r'[€$£]', '_MONNAIE_', message)
+    message = "".join([char for char in message if char not in string.punctuation])
+    return [stemmer.stem(mot) for mot in message.split() if mot not in stop_words_fr]
 
-# 4. Préparation des données
-X = df['text_fr'] # Les messages
-y = df['labels']  # Les étiquettes (ham ou spam)
+class SpamEngine:
+    def __init__(self):
+        self.model = None
+        self.charger_ou_entrainer()
 
-# Découpage en données d'entraînement (80%) et de test (20%)
-X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+    def charger_ou_entrainer(self, force_retrain=False):
+        # Si le fichier .pkl existe, on ne ré-entraîne pas !
+        if os.path.exists(MODEL_FILE) and not force_retrain:
+            print("📦 MODE RAPIDE : Chargement du modèle existant (pas d'entraînement)...")
+            try:
+                self.model = joblib.load(MODEL_FILE)
+            except Exception as e:
+                print(f"⚠️ Erreur de chargement : {e}. Ré-entraînement forcé...")
+                self.entrainer()
+        else:
+            self.entrainer()
 
-# 5. Vectorisation (Transformation du texte en nombres)
-# Étape A: Compter les mots (Bag of Words)
-bow_transformer = CountVectorizer(analyzer=nettoyage_texte).fit(X_train)
-X_train_bow = bow_transformer.transform(X_train)
+    def entrainer(self):
+        print("🧠 MODE APPRENTISSAGE : Entraînement du modèle en cours...")
+        if not os.path.exists(DATA_FILE):
+            raise FileNotFoundError(f"Fichier {DATA_FILE} introuvable.")
+        
+        df = pd.read_csv(DATA_FILE)
+        pipeline = Pipeline([
+            ('tfidf', TfidfVectorizer(analyzer=preprocessing_ultra, ngram_range=(1, 2))),
+            ('nb', MultinomialNB(alpha=0.1))
+        ])
+        
+        pipeline.fit(df['text_fr'], df['labels'])
+        self.model = pipeline
+        joblib.dump(pipeline, MODEL_FILE)
+        print("💾 Modèle sauvegardé dans 'spam_model.pkl'.")
 
-# Étape B: Pondération TF-IDF (pour donner moins d'importance aux mots trop fréquents)
-tfidf_transformer = TfidfTransformer().fit(X_train_bow)
-X_train_tfidf = tfidf_transformer.transform(X_train_bow)
+    def predire(self, message):
+        label = self.model.predict([message])[0]
+        prob = self.model.predict_proba([message])[0]
+        idx_spam = list(self.model.classes_).index('spam')
+        score = prob[idx_spam] * 100
+        return label, score
 
-# 6. Entraînement du modèle Naive Bayes
-spam_detector = MultinomialNB().fit(X_train_tfidf, y_train)
+# --- EXÉCUTION ---
+if __name__ == "__main__":
+    ia = SpamEngine() # Ici, il va charger s'il existe, sinon il entraîne.
 
-# 7. Évaluation du modèle
-X_test_bow = bow_transformer.transform(X_test)
-X_test_tfidf = tfidf_transformer.transform(X_test_bow)
-predictions = spam_detector.predict(X_test_tfidf)
-
-print("--- Rapport de Classification ---")
-print(classification_report(y_test, predictions))
-
-# 8. Test sur un nouveau message
-def predire_message(msg):
-    msg_transformed = tfidf_transformer.transform(bow_transformer.transform([msg]))
-    prediction = spam_detector.predict(msg_transformed)[0]
-    return prediction
-
-# Exemple :
-#nouveau_sms = "Félicitations ! Vous avez gagné un iPhone. Cliquez ici pour réclamer votre prix."
-nouveau_sms = "salut! veut tu sortir avec moi?"
-print(f"Test message : '{nouveau_sms}'")
-print(f"Résultat : {predire_message(nouveau_sms)}")
+    msg = "Félicitation ! vous avez ganier 500£ ?"
+    verdict, score = ia.predire(msg)
+    print(f"\nRésultat : {verdict} ({score:.2f}%)")
