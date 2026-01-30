@@ -5,62 +5,58 @@ from nltk.corpus import stopwords
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import CountVectorizer, TfidfTransformer
 from sklearn.naive_bayes import MultinomialNB
-from sklearn.metrics import classification_report, confusion_matrix
-import seaborn as sns
-import matplotlib.pyplot as plt
+from sklearn.metrics import classification_report
 
-# 1. Téléchargement des ressources pour le français
-nltk.download('stopwords')
+# 1. Ressources NLTK
+nltk.download('stopwords', quiet=True)
 stop_words_fr = stopwords.words('french')
 
-# 2. Chargement de la dataset
-# Assurez-vous que le fichier csv est dans le même dossier
+# 2. Chargement (Vérifie bien que le fichier est au bon endroit !)
 df = pd.read_csv('french_spam_only.csv')
 
-# 3. Fonction de nettoyage (Preprocessing)
+# 3. Nettoyage
 def nettoyage_texte(message):
-    # Supprimer la ponctuation
     sans_ponctuation = [char for char in message if char not in string.punctuation]
     message = ''.join(sans_ponctuation)
-    
-    # Supprimer les mots vides (stopwords) français
     return [mot for mot in message.split() if mot.lower() not in stop_words_fr]
 
-# 4. Préparation des données
-X = df['text_fr'] # Les messages
-y = df['labels']  # Les étiquettes (ham ou spam)
-
-# Découpage en données d'entraînement (80%) et de test (20%)
+# 4. Préparation
+X = df['text_fr']
+y = df['labels']
 X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
 
-# 5. Vectorisation (Transformation du texte en nombres)
-# Étape A: Compter les mots (Bag of Words)
+# 5. Vectorisation
 bow_transformer = CountVectorizer(analyzer=nettoyage_texte).fit(X_train)
 X_train_bow = bow_transformer.transform(X_train)
-
-# Étape B: Pondération TF-IDF (pour donner moins d'importance aux mots trop fréquents)
 tfidf_transformer = TfidfTransformer().fit(X_train_bow)
 X_train_tfidf = tfidf_transformer.transform(X_train_bow)
 
-# 6. Entraînement du modèle Naive Bayes
+# 6. Entraînement
 spam_detector = MultinomialNB().fit(X_train_tfidf, y_train)
 
-# 7. Évaluation du modèle
-X_test_bow = bow_transformer.transform(X_test)
-X_test_tfidf = tfidf_transformer.transform(X_test_bow)
-predictions = spam_detector.predict(X_test_tfidf)
+# --- LA PARTIE QUI T'INTÉRESSE ---
 
-print("--- Rapport de Classification ---")
-print(classification_report(y_test, predictions))
-
-# 8. Test sur un nouveau message
+# 8. Test sur un nouveau message avec SCORE
 def predire_message(msg):
+    # Transformation du texte
     msg_transformed = tfidf_transformer.transform(bow_transformer.transform([msg]))
+    
+    # Prédiction de la catégorie (ham ou spam)
     prediction = spam_detector.predict(msg_transformed)[0]
-    return prediction
+    
+    # Récupération des probabilités [prob_ham, prob_spam]
+    probabilites = spam_detector.predict_proba(msg_transformed)[0]
+    
+    # Trouver l'indice correspondant au label 'spam' dans le modèle
+    index_spam = list(spam_detector.classes_).index('spam')
+    score_spam = probabilites[index_spam] * 100
+    
+    return prediction, score_spam
 
-# Exemple :
-#nouveau_sms = "Félicitations ! Vous avez gagné un iPhone. Cliquez ici pour réclamer votre prix."
-nouveau_sms = "salut! veut tu sortir avec moi?"
-print(f"Test message : '{nouveau_sms}'")
-print(f"Résultat : {predire_message(nouveau_sms)}")
+# Exemple d'utilisation
+nouveau_sms = "salut! T'es jolie 😍."
+label, score = predire_message(nouveau_sms)
+
+print(f"\nMessage : '{nouveau_sms}'")
+print(f"Verdict : {label.upper()}")
+print(f"Probabilité que ce soit un spam : {score:.2f}%")
