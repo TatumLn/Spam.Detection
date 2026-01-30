@@ -1,6 +1,22 @@
+import os
 from flask import Flask
 from .config import config
 from .extensions import db, jwt, cors
+
+
+def get_cors_origins():
+    """Récupère les origines CORS autorisées depuis les variables d'environnement."""
+    # Origines par défaut pour le développement local
+    origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+    # Ajouter l'URL du frontend Netlify si configurée
+    frontend_url = os.environ.get('FRONTEND_URL')
+    if frontend_url:
+        origins.append(frontend_url)
+        # Aussi accepter sans le slash final
+        origins.append(frontend_url.rstrip('/'))
+
+    return origins
 
 
 def create_app(config_name='default'):
@@ -15,9 +31,10 @@ def create_app(config_name='default'):
     jwt.init_app(app)
     cors.init_app(app, resources={
         r"/api/*": {
-            "origins": ["http://localhost:5173", "http://127.0.0.1:5173"],
+            "origins": get_cors_origins(),
             "methods": ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-            "allow_headers": ["Content-Type", "Authorization"]
+            "allow_headers": ["Content-Type", "Authorization"],
+            "supports_credentials": True
         }
     })
 

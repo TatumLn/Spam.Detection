@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: spamguard-api
+    runtime: python
+    region: frankfurt  # ou oregon, singapore selon ta localisation
+    plan: free  # free, starter, standard, pro
+    buildCommand: ./build.sh
+    startCommand: gunicorn run:app --bind 0.0.0.0:$PORT --workers 2
+    envVars:
+      - key: FLASK_ENV
+        value: production
+      - key: PYTHON_VERSION
+        value: "3.11"
+      - key: SECRET_KEY
+        generateValue: true
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      - key: FRONTEND_URL
+        sync: false  # A configurer manuellement avec ton URL Netlify
