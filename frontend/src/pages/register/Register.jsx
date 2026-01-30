@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Shield, Mail, Lock, Eye, EyeOff, Sparkles, ArrowRight, User, Github, Chrome, CheckCircle2 } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { authAPI } from '../../services/api';
 
 export default function SignupPage() {
   const [formData, setFormData] = useState({
@@ -12,10 +13,17 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [passwordStrength, setPasswordStrength] = useState(0);
   const [particles, setParticles] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // Redirect if already authenticated
+    if (authAPI.isAuthenticated()) {
+      navigate('/home');
+    }
+
     const newParticles = Array.from({ length: 40 }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
@@ -25,7 +33,7 @@ export default function SignupPage() {
       delay: Math.random() * 5
     }));
     setParticles(newParticles);
-  }, []);
+  }, [navigate]);
 
   useEffect(() => {
     // Calculate password strength
@@ -47,19 +55,28 @@ export default function SignupPage() {
 
   const handleSignup = async (e) => {
     e.preventDefault();
+    setError('');
 
     if (formData.password !== formData.confirmPassword) {
-      alert('Les mots de passe ne correspondent pas !');
+      setError('Les mots de passe ne correspondent pas !');
+      return;
+    }
+
+    if (formData.password.length < 6) {
+      setError('Le mot de passe doit contenir au moins 6 caractères');
       return;
     }
 
     setIsLoading(true);
 
-    // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 2000));
-
-    console.log('Signup:', formData);
-    setIsLoading(false);
+    try {
+      await authAPI.register(formData.name, formData.email, formData.password);
+      navigate('/home');
+    } catch (err) {
+      setError(err.message || 'Erreur lors de l\'inscription');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSocialSignup = (provider) => {
@@ -127,6 +144,13 @@ export default function SignupPage() {
           <h2 className="text-3xl font-black mb-8 text-center bg-gradient-to-r from-white to-purple-200 bg-clip-text text-transparent">
             Créer un compte
           </h2>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300 text-sm animate-fade-in">
+              {error}
+            </div>
+          )}
 
           <form onSubmit={handleSignup} className="space-y-6">
             {/* Name Input */}
@@ -294,30 +318,11 @@ export default function SignupPage() {
             <div className="flex-1 h-px bg-gradient-to-r from-transparent via-purple-500/30 to-transparent" />
           </div>
 
-          {/* Social Signup */}
-          {/*           <div className="space-y-3">
-            <button
-              onClick={() => handleSocialSignup('google')}
-              className="w-full py-4 rounded-2xl font-semibold bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 flex items-center justify-center gap-3 group"
-            >
-              <Chrome className="w-5 h-5 text-cyan-400 group-hover:scale-110 transition-transform duration-300" />
-              <span>S'inscrire avec Google</span>
-            </button>
-
-            <button
-              onClick={() => handleSocialSignup('github')}
-              className="w-full py-4 rounded-2xl font-semibold bg-white/5 border border-white/10 hover:bg-white/10 hover:border-white/20 transition-all duration-300 flex items-center justify-center gap-3 group"
-            >
-              <Github className="w-5 h-5 text-purple-400 group-hover:scale-110 transition-transform duration-300" />
-              <span>S'inscrire avec GitHub</span>
-            </button>
-          </div> */}
-
           {/* Login Link */}
           <div className="mt-8 text-center">
             <p className="text-purple-200/80">
               Vous avez déjà un compte ?{' '}
-              <NavLink to="/login" className="font-bold text-transparent bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text hover:from-purple-300 hover:to-cyan-300 transition-all duration-300">
+              <NavLink to="/" className="font-bold text-transparent bg-gradient-to-r from-purple-400 to-cyan-400 bg-clip-text hover:from-purple-300 hover:to-cyan-300 transition-all duration-300">
                Se connecter
               </NavLink>
             </p>
@@ -349,7 +354,7 @@ export default function SignupPage() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap');
-       
+
         * {
           font-family: 'Space Grotesk', -apple-system, system-ui, sans-serif;
         }

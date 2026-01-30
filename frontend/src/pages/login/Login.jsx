@@ -1,14 +1,22 @@
 import React, { useState, useEffect } from 'react';
 import { Mail, Lock, Apple, Chrome } from 'lucide-react';
-import { NavLink } from 'react-router-dom';
+import { NavLink, useNavigate } from 'react-router-dom';
+import { authAPI } from '../../services/api';
 
 export default function ModernLoginPage() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState('');
   const [gridLines, setGridLines] = useState([]);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // Redirect if already authenticated
+    if (authAPI.isAuthenticated()) {
+      navigate('/home');
+    }
+
     // Generate animated grid lines
     const lines = [];
     for (let i = 0; i < 6; i++) {
@@ -19,16 +27,21 @@ export default function ModernLoginPage() {
       });
     }
     setGridLines(lines);
-  }, []);
+  }, [navigate]);
 
   const handleLogin = async (e) => {
     e.preventDefault();
     setIsLoading(true);
-   
-    await new Promise(resolve => setTimeout(resolve, 2000));
-   
-    console.log('Login:', { email, password });
-    setIsLoading(false);
+    setError('');
+
+    try {
+      await authAPI.login(email, password);
+      navigate('/home');
+    } catch (err) {
+      setError(err.message || 'Erreur de connexion');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSocialLogin = (provider) => {
@@ -106,7 +119,7 @@ export default function ModernLoginPage() {
         <div className="relative bg-gradient-to-b from-gray-900/80 to-black/80 backdrop-blur-2xl rounded-3xl p-10 border border-gray-800/50 shadow-2xl overflow-hidden">
           {/* Subtle top glow */}
           <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-cyan-500/50 to-transparent" />
-         
+
           {/* Logo/Icon */}
           <div className="flex justify-center mb-8 animate-fade-in">
             <div className="relative">
@@ -128,6 +141,13 @@ export default function ModernLoginPage() {
               </NavLink>
             </p>
           </div>
+
+          {/* Error Message */}
+          {error && (
+            <div className="mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300 text-sm animate-fade-in">
+              {error}
+            </div>
+          )}
 
           {/* Form */}
           <form onSubmit={handleLogin} className="space-y-5 mb-8">
@@ -182,39 +202,6 @@ export default function ModernLoginPage() {
               )}
             </button>
           </form>
-
-          {/* Divider */}
-          {/* <div className="flex items-center gap-4 mb-6 animate-fade-in" style={{ animationDelay: '0.5s' }}>
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent" />
-            <span className="text-gray-500 text-sm font-medium">OR</span>
-            <div className="flex-1 h-px bg-gradient-to-r from-transparent via-gray-700 to-transparent" />
-          </div> */}
-
-          {/* Social Login Buttons */}
-          {/* <div className="grid grid-cols-3 gap-3 animate-fade-in" style={{ animationDelay: '0.6s' }}>
-            <button
-              onClick={() => handleSocialLogin('apple')}
-              className="py-3.5 bg-black/50 border border-gray-800 rounded-xl hover:bg-gray-900/50 hover:border-gray-700 transition-all duration-300 flex items-center justify-center group"
-            >
-              <Apple className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors duration-300" />
-            </button>
-
-            <button
-              onClick={() => handleSocialLogin('google')}
-              className="py-3.5 bg-black/50 border border-gray-800 rounded-xl hover:bg-gray-900/50 hover:border-gray-700 transition-all duration-300 flex items-center justify-center group"
-            >
-              <Chrome className="w-5 h-5 text-gray-400 group-hover:text-white transition-colors duration-300" />
-            </button>
-
-            <button
-              onClick={() => handleSocialLogin('x')}
-              className="py-3.5 bg-black/50 border border-gray-800 rounded-xl hover:bg-gray-900/50 hover:border-gray-700 transition-all duration-300 flex items-center justify-center group"
-            >
-              <div className="text-gray-400 group-hover:text-white transition-colors duration-300">
-                <XIcon />
-              </div>
-            </button>
-          </div> */}
         </div>
 
         {/* Floating particles around card */}
@@ -224,7 +211,7 @@ export default function ModernLoginPage() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
-       
+
         * {
           font-family: 'Inter', -apple-system, system-ui, sans-serif;
         }

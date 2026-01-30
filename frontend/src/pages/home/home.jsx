@@ -1,34 +1,31 @@
 import React, { useState, useEffect } from 'react';
-import { Shield, AlertTriangle, CheckCircle, Sparkles, Zap, TrendingUp, History, BarChart3, Home } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, Sparkles, Zap, TrendingUp, History, BarChart3, LogOut } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import { authAPI, spamAPI } from '../../services/api';
 
 export default function SpamDetectorApp() {
   const [text, setText] = useState('');
   const [result, setResult] = useState(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [activeSection, setActiveSection] = useState('detector');
-  const [spamHistory, setSpamHistory] = useState([
-    {
-      text: "Amazing work! I did not even look at it. Visit my new work please...",
-      isSpam: true,
-      confidence: 98,
-      time: "2 Hours ago"
-    },
-    {
-      text: "Great project! Really enjoyed the implementation.",
-      isSpam: false,
-      confidence: 95,
-      time: "5 Hours ago"
-    },
-    {
-      text: "Click here for FREE money!!! Limited time offer!!!",
-      isSpam: true,
-      confidence: 99,
-      time: "1 Day ago"
-    }
-  ]);
+  const [spamHistory, setSpamHistory] = useState([]);
+  const [stats, setStats] = useState(null);
   const [particles, setParticles] = useState([]);
+  const [error, setError] = useState('');
+  const [user, setUser] = useState(null);
+  const navigate = useNavigate();
 
   useEffect(() => {
+    // Check authentication
+    if (!authAPI.isAuthenticated()) {
+      navigate('/');
+      return;
+    }
+
+    // Get current user
+    setUser(authAPI.getCurrentUser());
+
+    // Generate particles
     const newParticles = Array.from({ length: 30 }, (_, i) => ({
       id: i,
       x: Math.random() * 100,
@@ -38,58 +35,60 @@ export default function SpamDetectorApp() {
       delay: Math.random() * 5
     }));
     setParticles(newParticles);
-  }, []);
+
+    // Load initial data
+    loadHistory();
+    loadStats();
+  }, [navigate]);
+
+  const loadHistory = async () => {
+    try {
+      const data = await spamAPI.getHistory();
+      setSpamHistory(data.history || []);
+    } catch (err) {
+      console.error('Error loading history:', err);
+    }
+  };
+
+  const loadStats = async () => {
+    try {
+      const data = await spamAPI.getStats();
+      setStats(data.stats);
+    } catch (err) {
+      console.error('Error loading stats:', err);
+    }
+  };
 
   const analyzeText = async () => {
     if (!text.trim()) return;
-   
+
     setIsAnalyzing(true);
     setResult(null);
+    setError('');
 
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    try {
+      const data = await spamAPI.analyze(text);
 
-    const spamIndicators = [
-      'click here', 'free', 'limited time', 'act now', 'congratulations',
-      'winner', 'prize', 'urgent', 'hurry', 'buy now', 'discount',
-      'www.', 'http', 'visit my', 'desperate', 'amazing work'
-    ];
+      setResult({
+        isSpam: data.isSpam,
+        confidence: data.confidence,
+        indicators: data.indicators || [],
+        flags: data.flags || {}
+      });
 
-    const lowerText = text.toLowerCase();
-    const foundIndicators = spamIndicators.filter(indicator =>
-      lowerText.includes(indicator)
-    );
+      // Reload history and stats after analysis
+      loadHistory();
+      loadStats();
+    } catch (err) {
+      setError(err.message || 'Erreur lors de l\'analyse');
+    } finally {
+      setIsAnalyzing(false);
+    }
+  };
 
-    const hasMultipleExclamations = (text.match(/!/g) || []).length > 2;
-    const hasAllCaps = /[A-Z]{4,}/.test(text);
-    const hasUrl = /https?:\/\//.test(text);
-
-    const spamScore =
-      (foundIndicators.length * 15) +
-      (hasMultipleExclamations ? 20 : 0) +
-      (hasAllCaps ? 15 : 0) +
-      (hasUrl ? 10 : 0);
-
-    const isSpam = spamScore > 30;
-    const confidence = Math.min(95, Math.max(60, spamScore + Math.random() * 10));
-
-    const newResult = {
-      isSpam,
-      confidence: Math.round(confidence),
-      indicators: foundIndicators,
-      flags: {
-        multipleExclamations: hasMultipleExclamations,
-        allCaps: hasAllCaps,
-        suspiciousUrl: hasUrl
-      }
-    };
-
-    setResult(newResult);
-    setIsAnalyzing(false);
-
-    setSpamHistory(prev => [
-      { text: text.substring(0, 60) + '...', isSpam, confidence: Math.round(confidence), time: "Just now" },
-      ...prev.slice(0, 4)
-    ]);
+  const handleLogout = () => {
+    authAPI.logout();
+    navigate('/');
   };
 
   const getGradientClass = () => {
@@ -142,41 +141,62 @@ export default function SpamDetectorApp() {
           <p className="text-xl text-purple-200/80 max-w-2xl mx-auto font-light leading-relaxed">
             Détection intelligente de spam alimentée par l'IA
           </p>
+          {user && (
+            <p className="text-sm text-purple-300/60 mt-2">
+              Bienvenue, {user.name}
+            </p>
+          )}
         </header>
 
         {/* Modern Navbar */}
         <nav className="sticky top-0 z-50 backdrop-blur-xl bg-slate-900/60 border-b border-white/10 mb-12 animate-slide-down">
           <div className="container mx-auto px-6">
-            <div className="flex items-center justify-center gap-2 py-4">
-              {navItems.map((item) => {
-                const Icon = item.icon;
-                const isActive = activeSection === item.id;
-                return (
-                  <button
-                    key={item.id}
-                    onClick={() => setActiveSection(item.id)}
-                    className={`
-                      relative px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-500 transform
-                      flex items-center gap-3 group overflow-hidden
-                      ${isActive
-                        ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-600 text-white shadow-2xl shadow-purple-500/50 scale-105'
-                        : 'bg-white/5 text-purple-200 hover:bg-white/10 hover:scale-105 hover:text-white'
-                      }
-                    `}
-                  >
-                    <Icon className={`w-6 h-6 transition-transform duration-300 ${isActive ? 'animate-pulse-glow' : 'group-hover:rotate-12'}`} />
-                    <span>{item.label}</span>
-                    {isActive && (
-                      <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-cyan-400/20 animate-pulse-slow" />
-                    )}
-                  </button>
-                );
-              })}
+            <div className="flex items-center justify-between py-4">
+              <div className="flex items-center justify-center gap-2 flex-1">
+                {navItems.map((item) => {
+                  const Icon = item.icon;
+                  const isActive = activeSection === item.id;
+                  return (
+                    <button
+                      key={item.id}
+                      onClick={() => setActiveSection(item.id)}
+                      className={`
+                        relative px-8 py-4 rounded-2xl font-bold text-lg transition-all duration-500 transform
+                        flex items-center gap-3 group overflow-hidden
+                        ${isActive
+                          ? 'bg-gradient-to-r from-purple-600 via-pink-600 to-cyan-600 text-white shadow-2xl shadow-purple-500/50 scale-105'
+                          : 'bg-white/5 text-purple-200 hover:bg-white/10 hover:scale-105 hover:text-white'
+                        }
+                      `}
+                    >
+                      <Icon className={`w-6 h-6 transition-transform duration-300 ${isActive ? 'animate-pulse-glow' : 'group-hover:rotate-12'}`} />
+                      <span>{item.label}</span>
+                      {isActive && (
+                        <div className="absolute inset-0 bg-gradient-to-r from-purple-400/20 via-pink-400/20 to-cyan-400/20 animate-pulse-slow" />
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+              <button
+                onClick={handleLogout}
+                className="flex items-center gap-2 px-6 py-3 bg-red-500/20 hover:bg-red-500/30 border border-red-500/30 rounded-xl text-red-300 hover:text-red-200 transition-all duration-300"
+              >
+                <LogOut className="w-5 h-5" />
+                <span>Déconnexion</span>
+              </button>
             </div>
           </div>
         </nav>
 
         <div className="container mx-auto px-6 pb-12">
+          {/* Error Message */}
+          {error && (
+            <div className="max-w-4xl mx-auto mb-6 p-4 bg-red-500/20 border border-red-500/50 rounded-xl text-red-300 text-sm animate-fade-in">
+              {error}
+            </div>
+          )}
+
           {/* DETECTOR SECTION */}
           {activeSection === 'detector' && (
             <div className="max-w-4xl mx-auto space-y-6 animate-slide-up">
@@ -188,7 +208,7 @@ export default function SpamDetectorApp() {
                   </div>
                   <h2 className="text-2xl font-bold text-white">Analyser le Message</h2>
                 </div>
-               
+
                 <div className="relative mb-6">
                   <textarea
                     value={text}
@@ -250,7 +270,7 @@ export default function SpamDetectorApp() {
                       <h3 className={`text-3xl font-black mb-2 ${
                         result.isSpam ? 'text-red-400' : 'text-emerald-400'
                       }`}>
-                        {result.isSpam ? '🚨 SPAM DÉTECTÉ' : '✓ MESSAGE LÉGITIME'}
+                        {result.isSpam ? 'SPAM DETECTE' : 'MESSAGE LEGITIME'}
                       </h3>
                       <p className="text-lg text-purple-200/80">
                         Confiance: <span className="font-bold text-white text-2xl">{result.confidence}%</span>
@@ -308,7 +328,7 @@ export default function SpamDetectorApp() {
                           {key.replace(/([A-Z])/g, ' $1').toUpperCase()}
                         </div>
                         <div className="text-lg font-bold">
-                          {value ? '✗' : '✓'}
+                          {value ? 'X' : 'V'}
                         </div>
                       </div>
                     ))}
@@ -329,7 +349,7 @@ export default function SpamDetectorApp() {
                     </div>
                     <div>
                       <div className="text-sm text-purple-200/60 mb-1">Total Analysé</div>
-                      <div className="text-4xl font-black text-white">{spamHistory.length}</div>
+                      <div className="text-4xl font-black text-white">{stats?.total || 0}</div>
                     </div>
                   </div>
                   <div className="h-2 bg-slate-900/50 rounded-full overflow-hidden">
@@ -344,13 +364,13 @@ export default function SpamDetectorApp() {
                     </div>
                     <div>
                       <div className="text-sm text-red-200/60 mb-1">Spams Détectés</div>
-                      <div className="text-4xl font-black text-white">{spamHistory.filter(h => h.isSpam).length}</div>
+                      <div className="text-4xl font-black text-white">{stats?.spam || 0}</div>
                     </div>
                   </div>
                   <div className="h-2 bg-slate-900/50 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-red-500 to-orange-500 animate-expand"
-                      style={{ width: `${(spamHistory.filter(h => h.isSpam).length / spamHistory.length) * 100}%` }}
+                      style={{ width: `${stats?.total > 0 ? (stats.spam / stats.total) * 100 : 0}%` }}
                     ></div>
                   </div>
                 </div>
@@ -362,13 +382,13 @@ export default function SpamDetectorApp() {
                     </div>
                     <div>
                       <div className="text-sm text-emerald-200/60 mb-1">Messages Légitimes</div>
-                      <div className="text-4xl font-black text-white">{spamHistory.filter(h => !h.isSpam).length}</div>
+                      <div className="text-4xl font-black text-white">{stats?.legitimate || 0}</div>
                     </div>
                   </div>
                   <div className="h-2 bg-slate-900/50 rounded-full overflow-hidden">
                     <div
                       className="h-full bg-gradient-to-r from-emerald-500 to-cyan-500 animate-expand"
-                      style={{ width: `${(spamHistory.filter(h => !h.isSpam).length / spamHistory.length) * 100}%` }}
+                      style={{ width: `${stats?.total > 0 ? (stats.legitimate / stats.total) * 100 : 0}%` }}
                     ></div>
                   </div>
                 </div>
@@ -385,13 +405,13 @@ export default function SpamDetectorApp() {
                     <div className="flex justify-between mb-3">
                       <span className="text-purple-200">Taux de détection de spam</span>
                       <span className="font-bold text-white">
-                        {Math.round((spamHistory.filter(h => h.isSpam).length / spamHistory.length) * 100)}%
+                        {stats?.spamRate || 0}%
                       </span>
                     </div>
                     <div className="h-6 bg-slate-900/50 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-red-500 via-orange-500 to-yellow-500 rounded-full transition-all duration-1000 animate-expand"
-                        style={{ width: `${(spamHistory.filter(h => h.isSpam).length / spamHistory.length) * 100}%` }}
+                        style={{ width: `${stats?.spamRate || 0}%` }}
                       ></div>
                     </div>
                   </div>
@@ -400,13 +420,13 @@ export default function SpamDetectorApp() {
                     <div className="flex justify-between mb-3">
                       <span className="text-purple-200">Confiance moyenne</span>
                       <span className="font-bold text-white">
-                        {Math.round(spamHistory.reduce((acc, h) => acc + h.confidence, 0) / spamHistory.length)}%
+                        {stats?.averageConfidence || 0}%
                       </span>
                     </div>
                     <div className="h-6 bg-slate-900/50 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-purple-500 via-pink-500 to-cyan-500 rounded-full transition-all duration-1000 animate-expand"
-                        style={{ width: `${Math.round(spamHistory.reduce((acc, h) => acc + h.confidence, 0) / spamHistory.length)}%` }}
+                        style={{ width: `${stats?.averageConfidence || 0}%` }}
                       ></div>
                     </div>
                   </div>
@@ -415,13 +435,13 @@ export default function SpamDetectorApp() {
                     <div className="flex justify-between mb-3">
                       <span className="text-purple-200">Messages légitimes</span>
                       <span className="font-bold text-white">
-                        {Math.round((spamHistory.filter(h => !h.isSpam).length / spamHistory.length) * 100)}%
+                        {stats?.total > 0 ? Math.round((stats.legitimate / stats.total) * 100) : 0}%
                       </span>
                     </div>
                     <div className="h-6 bg-slate-900/50 rounded-full overflow-hidden">
                       <div
                         className="h-full bg-gradient-to-r from-emerald-500 via-teal-500 to-cyan-500 rounded-full transition-all duration-1000 animate-expand"
-                        style={{ width: `${(spamHistory.filter(h => !h.isSpam).length / spamHistory.length) * 100}%` }}
+                        style={{ width: `${stats?.total > 0 ? (stats.legitimate / stats.total) * 100 : 0}%` }}
                       ></div>
                     </div>
                   </div>
@@ -438,59 +458,67 @@ export default function SpamDetectorApp() {
                   <History className="w-8 h-8 text-cyan-400" />
                   Historique des Analyses
                 </h3>
-                <div className="space-y-4">
-                  {spamHistory.map((item, idx) => (
-                    <div
-                      key={idx}
-                      className={`p-6 rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] cursor-pointer group ${
-                        item.isSpam
-                          ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50'
-                          : 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50'
-                      } animate-fade-in`}
-                      style={{ animationDelay: `${idx * 0.1}s` }}
-                    >
-                      <div className="flex items-start justify-between mb-3">
-                        <div className="flex items-center gap-3">
-                          <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
-                            item.isSpam ? 'bg-red-500/20' : 'bg-emerald-500/20'
-                          }`}>
-                            {item.isSpam ? (
-                              <AlertTriangle className="w-6 h-6 text-red-400" />
-                            ) : (
-                              <CheckCircle className="w-6 h-6 text-emerald-400" />
-                            )}
-                          </div>
-                          <div>
-                            <span className={`text-sm font-bold px-3 py-1 rounded-full ${
-                              item.isSpam
-                                ? 'bg-red-500/30 text-red-300'
-                                : 'bg-emerald-500/30 text-emerald-300'
+                {spamHistory.length === 0 ? (
+                  <div className="text-center py-12 text-purple-300/60">
+                    <History className="w-16 h-16 mx-auto mb-4 opacity-50" />
+                    <p className="text-lg">Aucune analyse effectuée</p>
+                    <p className="text-sm mt-2">Commencez par analyser un message</p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {spamHistory.map((item, idx) => (
+                      <div
+                        key={item.id || idx}
+                        className={`p-6 rounded-2xl border backdrop-blur-sm transition-all duration-300 hover:scale-[1.02] cursor-pointer group ${
+                          item.isSpam
+                            ? 'bg-red-500/10 border-red-500/30 hover:bg-red-500/20 hover:border-red-500/50'
+                            : 'bg-emerald-500/10 border-emerald-500/30 hover:bg-emerald-500/20 hover:border-emerald-500/50'
+                        } animate-fade-in`}
+                        style={{ animationDelay: `${idx * 0.1}s` }}
+                      >
+                        <div className="flex items-start justify-between mb-3">
+                          <div className="flex items-center gap-3">
+                            <div className={`w-12 h-12 rounded-xl flex items-center justify-center ${
+                              item.isSpam ? 'bg-red-500/20' : 'bg-emerald-500/20'
                             }`}>
-                              {item.isSpam ? 'SPAM' : 'LÉGITIME'}
-                            </span>
+                              {item.isSpam ? (
+                                <AlertTriangle className="w-6 h-6 text-red-400" />
+                              ) : (
+                                <CheckCircle className="w-6 h-6 text-emerald-400" />
+                              )}
+                            </div>
+                            <div>
+                              <span className={`text-sm font-bold px-3 py-1 rounded-full ${
+                                item.isSpam
+                                  ? 'bg-red-500/30 text-red-300'
+                                  : 'bg-emerald-500/30 text-emerald-300'
+                              }`}>
+                                {item.isSpam ? 'SPAM' : 'LEGITIME'}
+                              </span>
+                            </div>
+                          </div>
+                          <span className="text-sm text-purple-300/60">{item.time}</span>
+                        </div>
+                        <p className="text-base text-white/90 mb-3 leading-relaxed">{item.text}</p>
+                        <div className="flex items-center justify-between">
+                          <div className="text-sm text-purple-200/70">
+                            Confiance: <span className="font-bold text-white">{item.confidence}%</span>
+                          </div>
+                          <div className="h-2 w-32 bg-slate-900/50 rounded-full overflow-hidden">
+                            <div
+                              className={`h-full rounded-full ${
+                                item.isSpam
+                                  ? 'bg-gradient-to-r from-red-500 to-orange-500'
+                                  : 'bg-gradient-to-r from-emerald-500 to-cyan-500'
+                              }`}
+                              style={{ width: `${item.confidence}%` }}
+                            ></div>
                           </div>
                         </div>
-                        <span className="text-sm text-purple-300/60">{item.time}</span>
                       </div>
-                      <p className="text-base text-white/90 mb-3 leading-relaxed">{item.text}</p>
-                      <div className="flex items-center justify-between">
-                        <div className="text-sm text-purple-200/70">
-                          Confiance: <span className="font-bold text-white">{item.confidence}%</span>
-                        </div>
-                        <div className="h-2 w-32 bg-slate-900/50 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full ${
-                              item.isSpam
-                                ? 'bg-gradient-to-r from-red-500 to-orange-500'
-                                : 'bg-gradient-to-r from-emerald-500 to-cyan-500'
-                            }`}
-                            style={{ width: `${item.confidence}%` }}
-                          ></div>
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -499,7 +527,7 @@ export default function SpamDetectorApp() {
 
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;600;700&display=swap');
-       
+
         * {
           font-family: 'Space Grotesk', -apple-system, system-ui, sans-serif;
         }
