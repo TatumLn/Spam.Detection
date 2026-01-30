@@ -1,11 +1,32 @@
+"""
+Service de détection de spam (avec ML + fallback règles)
+=========================================================
+
+Ce service utilise en priorité le modèle ML Naive Bayes pour la détection.
+Si le modèle n'est pas disponible, il utilise un système de règles heuristiques.
+"""
+
 import re
 import random
 
+# Tentative d'import du détecteur ML
+try:
+    from app.services.ml_spam_detector import get_detector, MLSpamDetector
+    ML_AVAILABLE = True
+except Exception:
+    ML_AVAILABLE = False
+
 
 class SpamDetector:
-    """Service de détection de spam basé sur des règles et indicateurs"""
+    """
+    Service de détection de spam hybride.
 
-    # Indicateurs de spam (mots-clés suspects)
+    Utilise:
+    - ML (Naive Bayes + TF-IDF) si le modèle est disponible
+    - Règles heuristiques en fallback
+    """
+
+    # Indicateurs de spam (mots-clés suspects) - utilisés en fallback
     SPAM_INDICATORS = [
         'click here', 'free', 'limited time', 'act now', 'congratulations',
         'winner', 'prize', 'urgent', 'hurry', 'buy now', 'discount',
@@ -42,13 +63,40 @@ class SpamDetector:
     @classmethod
     def analyze(cls, text):
         """
-        Analyser un texte pour détecter s'il s'agit de spam
+        Analyser un texte pour détecter s'il s'agit de spam.
+
+        Utilise le modèle ML en priorité, avec fallback sur les règles heuristiques.
 
         Args:
             text (str): Le texte à analyser
 
         Returns:
             dict: Résultat de l'analyse avec score, indicateurs et flags
+        """
+        # Essayer d'utiliser le modèle ML en priorité
+        if ML_AVAILABLE:
+            try:
+                detector = get_detector()
+                result = detector.analyze(text)
+                result['method'] = 'ml'  # Indiquer la méthode utilisée
+                return result
+            except Exception as e:
+                # En cas d'erreur, utiliser le fallback
+                print(f"[SpamDetector] Erreur ML, fallback sur règles: {e}")
+
+        # Fallback: Système basé sur les règles heuristiques
+        return cls._analyze_with_rules(text)
+
+    @classmethod
+    def _analyze_with_rules(cls, text):
+        """
+        Analyse basée sur les règles heuristiques (fallback).
+
+        Args:
+            text (str): Le texte à analyser
+
+        Returns:
+            dict: Résultat de l'analyse
         """
         if not text or not text.strip():
             return {
@@ -59,7 +107,8 @@ class SpamDetector:
                     'multipleExclamations': False,
                     'allCaps': False,
                     'suspiciousUrl': False
-                }
+                },
+                'method': 'rules'
             }
 
         text_lower = text.lower()
@@ -123,7 +172,6 @@ class SpamDetector:
 
         # Calculer la confiance (entre 60% et 95%)
         base_confidence = min(95, max(60, score + 40))
-        # Ajouter une légère variation aléatoire pour plus de réalisme
         confidence = min(95, max(60, base_confidence + random.randint(-5, 5)))
 
         return {
@@ -131,7 +179,8 @@ class SpamDetector:
             'confidence': confidence,
             'indicators': found_indicators,
             'flags': flags,
-            'score': score
+            'score': score,
+            'method': 'rules'
         }
 
     @classmethod
