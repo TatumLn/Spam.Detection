@@ -29,12 +29,16 @@ def analyze_spam():
     # Analyser le texte
     result = SpamDetector.analyze(text)
 
+    # Convertir les types numpy en types Python natifs pour PostgreSQL
+    is_spam = bool(result['isSpam'])
+    confidence = float(result['confidence'])
+
     # Sauvegarder l'analyse dans l'historique
     analysis = SpamAnalysis(
         user_id=user_id,
         text=text,
-        is_spam=result['isSpam'],
-        confidence=result['confidence']
+        is_spam=is_spam,
+        confidence=confidence
     )
     analysis.set_indicators(result['indicators'])
     analysis.set_flags(result['flags'])
@@ -44,11 +48,11 @@ def analyze_spam():
 
     return jsonify({
         'id': analysis.id,
-        'isSpam': result['isSpam'],
-        'confidence': result['confidence'],
+        'isSpam': is_spam,
+        'confidence': confidence,
         'indicators': result['indicators'],
         'flags': result['flags'],
-        'level': SpamDetector.get_spam_level(result['confidence'])
+        'level': SpamDetector.get_spam_level(confidence)
     }), 200
 
 

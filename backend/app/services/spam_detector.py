@@ -8,13 +8,40 @@ Si le modèle n'est pas disponible, il utilise un système de règles heuristiqu
 
 import re
 import random
+import os
 
-# Tentative d'import du détecteur ML
-try:
-    from app.services.ml_spam_detector import get_detector, MLSpamDetector
-    ML_AVAILABLE = True
-except Exception:
-    ML_AVAILABLE = False
+# Chemin vers le modèle ML
+MODEL_PATH = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.dirname(__file__))),
+    'model',
+    'spam_model.pkl'
+)
+
+# Variables globales pour le ML
+ML_AVAILABLE = False
+_ml_detector = None
+
+
+def _try_load_ml():
+    """Tente de charger le détecteur ML."""
+    global ML_AVAILABLE, _ml_detector
+
+    if not os.path.exists(MODEL_PATH):
+        print(f"[SpamDetector] Modele ML non trouve, utilisation des regles")
+        return False
+
+    try:
+        from app.services.ml_spam_detector import get_detector
+        _ml_detector = get_detector()
+        print("[SpamDetector] Modele ML charge avec succes")
+        return True
+    except Exception as e:
+        print(f"[SpamDetector] Erreur chargement ML: {e}")
+        return False
+
+
+# Tenter de charger le ML au démarrage
+ML_AVAILABLE = _try_load_ml()
 
 
 class SpamDetector:
@@ -74,15 +101,13 @@ class SpamDetector:
             dict: Résultat de l'analyse avec score, indicateurs et flags
         """
         # Essayer d'utiliser le modèle ML en priorité
-        if ML_AVAILABLE:
+        if ML_AVAILABLE and _ml_detector is not None:
             try:
-                detector = get_detector()
-                result = detector.analyze(text)
-                result['method'] = 'ml'  # Indiquer la méthode utilisée
+                result = _ml_detector.analyze(text)
+                result['method'] = 'ml'
                 return result
             except Exception as e:
-                # En cas d'erreur, utiliser le fallback
-                print(f"[SpamDetector] Erreur ML, fallback sur règles: {e}")
+                print(f"[SpamDetector] Erreur ML, fallback sur regles: {e}")
 
         # Fallback: Système basé sur les règles heuristiques
         return cls._analyze_with_rules(text)

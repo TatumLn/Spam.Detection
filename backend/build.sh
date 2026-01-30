@@ -1,17 +1,16 @@
-#!/usr/bin/env bash
+#!/bin/bash
 # Script de build pour Render
-# Ce script est exécuté lors du déploiement
 
-set -e  # Arrêter en cas d'erreur
+set -e
 
-echo "=== Installation des dépendances Python ==="
+echo "=== Installation des dependances Python ==="
 pip install --upgrade pip
 pip install -r requirements.txt
 
-echo "=== Téléchargement des ressources NLTK ==="
+echo "=== Telechargement des ressources NLTK ==="
 python -c "import nltk; nltk.download('stopwords', quiet=True)"
 
-echo "=== Entraînement du modèle ML ==="
+echo "=== Entrainement du modele ML ==="
 python train_model.py
 
-echo "=== Build terminé avec succès ==="
+echo "=== Build termine avec succes ==="
